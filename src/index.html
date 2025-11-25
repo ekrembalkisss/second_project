@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Source Fusion Studio</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div class="logo">Source Fusion Studio</div>
+    <p class="tagline">Collect sources, extract metadata, and craft human-like scripts.</p>
+  </header>
+
+  <main>
+    <section class="panel" id="source-panel">
+      <div class="panel-header">
+        <h2>1. Collect Sources</h2>
+        <p>Upload files, search the web, run deep searches, or paste text.</p>
+      </div>
+
+      <div class="source-grid">
+        <form id="upload-form" class="input-card" aria-label="Upload source files">
+          <h3>Upload</h3>
+          <input type="file" id="file-input" multiple>
+          <button type="submit">Add Uploads</button>
+        </form>
+
+        <form id="web-search-form" class="input-card" aria-label="Add web search queries">
+          <h3>Web Search</h3>
+          <input type="text" id="web-search" placeholder="e.g., climate tech trends" required>
+          <button type="submit">Add Query</button>
+        </form>
+
+        <form id="deep-search-form" class="input-card" aria-label="Add deep search queries">
+          <h3>Deep Search</h3>
+          <input type="text" id="deep-search" placeholder="e.g., LLM retrieval benchmarks" required>
+          <button type="submit">Add Deep Search</button>
+        </form>
+
+        <form id="paste-form" class="input-card" aria-label="Paste raw text">
+          <h3>Pasted Text</h3>
+          <textarea id="paste-area" rows="4" placeholder="Paste notes or transcripts"></textarea>
+          <button type="submit">Add Text</button>
+        </form>
+      </div>
+
+      <div class="sources-list">
+        <h4>Captured Sources</h4>
+        <ul id="sources"></ul>
+      </div>
+
+      <div class="metadata-gate">
+        <button id="extract-metadata" class="primary">Extract Metadata</button>
+        <p class="gate-hint">Metadata must be extracted before writing the channel name, title, or script.</p>
+        <div id="metadata-results" class="metadata-results"></div>
+      </div>
+    </section>
+
+    <section class="panel" id="details-panel" aria-live="polite">
+      <div class="panel-header">
+        <h2>2. Channel Details</h2>
+        <p>Provide the channel name, video title, and script after metadata extraction.</p>
+      </div>
+      <form id="details-form" class="details-form" novalidate>
+        <label>
+          Channel Name
+          <input type="text" id="channel-name" placeholder="Channel name" required>
+        </label>
+        <label>
+          Video Title
+          <input type="text" id="video-title" placeholder="Video title" required>
+        </label>
+        <label>
+          Script
+          <textarea id="script" rows="6" placeholder="Paste or write the script" required></textarea>
+        </label>
+        <button type="submit" class="primary">Run Analysis Pipeline</button>
+        <p class="validation-message" id="validation-message"></p>
+      </form>
+    </section>
+
+    <section class="panel" id="pipeline-panel">
+      <div class="panel-header">
+        <h2>3. Processing Pipeline</h2>
+        <p>Watch the motion-graphic progress as the script is evaluated against gathered sources.</p>
+      </div>
+
+      <div class="progress-display">
+        <div class="orbital"></div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-steps" id="progress-steps"></div>
+      </div>
+
+      <div class="analysis-log" id="analysis-log"></div>
+    </section>
+
+    <section class="panel" id="report-panel">
+      <div class="panel-header">
+        <h2>4. Report</h2>
+        <p>Channel inputs and analysis are integrated here for review.</p>
+      </div>
+      <div id="report" class="report"></div>
+    </section>
+  </main>
+
+  <script src="main.js"></script>
+</body>
+</html>
