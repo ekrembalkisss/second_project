@@ -17,6 +17,8 @@ A lightweight, front-end only scaffold for collecting sources, extracting metada
 - Expressive, humorous, fictional, or very short lines are treated as narrative and never flagged.
 - Coverage represents the share of factual sentences (and a separate factual line score) that show overlap with captured sources; the flagged lists contain only factual sentences/lines missing evidence.
 - Evidence matching ignores stopwords, looks at neighboring context, and requires several meaningful token overlaps so generic wording alone cannot mark a line as supported.
+- Bigram/phrase overlap and blended context scores are required before a factual claim is treated as supported; a single stray word match will not grant credit.
+- Sentence coverage is based on every factual sentence detected (often more than visible lines in the textarea), while the line coverage badge reflects factual lines; both flagged lists enumerate only the unsupported factual items.
 
 ## Exporting results
 1. Add sources and run **Extract Metadata**.

@@ -332,16 +332,58 @@ function meaningfulTokens(tokens) {
   return tokens.filter((token) => !STOPWORDS.has(token));
 }
 
+function buildBigrams(tokens) {
+  const bigrams = [];
+  for (let i = 0; i < tokens.length - 1; i += 1) {
+    bigrams.push(`${tokens[i]} ${tokens[i + 1]}`);
+  }
+  return bigrams;
+}
+
+function buildEvidenceIndex(text) {
+  const tokens = meaningfulTokens(tokenize(text));
+  const tokenSet = new Set(tokens);
+  const bigramSet = new Set(buildBigrams(tokens));
+  return { tokens, tokenSet, bigramSet };
+}
+
+function scoreEvidence(primaryTokens, contextTokens, evidenceIndex) {
+  const uniqueTokens = new Set(primaryTokens);
+  const overlapTokens = primaryTokens.filter((token) => evidenceIndex.tokenSet.has(token));
+  const uniqueOverlap = Array.from(new Set(overlapTokens));
+  const tokenScore = uniqueTokens.size ? uniqueOverlap.length / uniqueTokens.size : 0;
+
+  const primaryBigrams = buildBigrams(primaryTokens);
+  const bigramMatches = primaryBigrams.filter((gram) => evidenceIndex.bigramSet.has(gram));
+
+  const contextUniqueTokens = new Set(contextTokens);
+  const contextOverlap = contextTokens.filter((token) => evidenceIndex.tokenSet.has(token));
+  const contextUniqueOverlap = Array.from(new Set(contextOverlap));
+  const contextScore = contextUniqueTokens.size
+    ? contextUniqueOverlap.length / contextUniqueTokens.size
+    : 0;
+
+  const strongTokenHit = tokenScore >= 0.45 && uniqueOverlap.length >= 4;
+  const bigramHit = bigramMatches.length >= 2;
+  const blendedHit = tokenScore >= 0.3 && contextScore >= 0.25 && (uniqueOverlap.length + contextUniqueOverlap.length) >= 6;
+
+  return {
+    supported: strongTokenHit || bigramHit || blendedHit,
+    tokenScore: Math.round(tokenScore * 100),
+    contextScore: Math.round(contextScore * 100),
+    evidenceTokens: uniqueOverlap.slice(0, 12),
+    contextTokens: contextUniqueOverlap.slice(0, 8),
+    bigramMatches: bigramMatches.slice(0, 6)
+  };
+}
+
 function evaluateScript(script) {
   const rawScriptTokens = tokenize(script);
   const scriptTokens = meaningfulTokens(rawScriptTokens);
   const scriptSentences = extractSentences(script);
   const scriptLines = extractLines(script);
   const aggregateText = sources.map((src) => src.content || src.label).join(' ');
-  const sourceTokens = meaningfulTokens(tokenize(aggregateText));
-  const sourceTokenSet = new Set(sourceTokens);
-
-  const matchedTokens = scriptTokens.filter((token) => sourceTokenSet.has(token));
+  const evidenceIndex = buildEvidenceIndex(aggregateText);
 
   const contextualSentenceTokens = scriptSentences.map((sentence, index) => {
     const neighborWindow = [scriptSentences[index - 1], sentence, scriptSentences[index + 1]]
@@ -353,17 +395,17 @@ function evaluateScript(script) {
   const perSentence = scriptSentences.map((sentence, index) => {
     const tokens = meaningfulTokens(tokenize(sentence));
     const contextTokens = contextualSentenceTokens[index];
-    const matches = tokens.filter((token) => sourceTokenSet.has(token));
-    const contextMatches = contextTokens.filter((token) => sourceTokenSet.has(token));
-    const ratio = tokens.length ? matches.length / tokens.length : 0;
-    const combinedEvidence = Array.from(new Set([...matches, ...contextMatches]));
+    const support = scoreEvidence(tokens, contextTokens, evidenceIndex);
     const factual = isFactualSentence(sentence);
     return {
       sentence,
       isFactual: factual,
-      supported: factual ? (ratio >= 0.35 && matches.length >= 3) || combinedEvidence.length >= 6 : true,
-      matchRatio: Math.round(ratio * 100),
-      evidence: combinedEvidence.slice(0, 12)
+      supported: factual ? support.supported : true,
+      matchRatio: support.tokenScore,
+      contextMatch: support.contextScore,
+      evidence: support.evidenceTokens,
+      contextEvidence: support.contextTokens,
+      bigrams: support.bigramMatches
     };
   });
 
@@ -371,20 +413,20 @@ function evaluateScript(script) {
     const neighborWindow = [scriptLines[index - 1], line, scriptLines[index + 1]].filter(Boolean).join(' ');
     const lineTokens = meaningfulTokens(tokenize(line));
     const contextTokens = meaningfulTokens(tokenize(neighborWindow));
-    const matches = lineTokens.filter((token) => sourceTokenSet.has(token));
-    const contextMatches = contextTokens.filter((token) => sourceTokenSet.has(token));
-    const ratio = lineTokens.length ? matches.length / lineTokens.length : 0;
+    const support = scoreEvidence(lineTokens, contextTokens, evidenceIndex);
     const lineSentences = extractSentences(line);
     const lineIsFactual =
       lineSentences.some((sentence) => isFactualSentence(sentence)) || isFactualSentence(line);
-    const combinedEvidence = Array.from(new Set([...matches, ...contextMatches]));
     return {
       lineNumber: index + 1,
       text: line,
       isFactual: lineIsFactual,
-      supported: lineIsFactual ? (ratio >= 0.35 && matches.length >= 3) || combinedEvidence.length >= 6 : true,
-      matchRatio: Math.round(ratio * 100),
-      evidence: combinedEvidence.slice(0, 12)
+      supported: lineIsFactual ? support.supported : true,
+      matchRatio: support.tokenScore,
+      contextMatch: support.contextScore,
+      evidence: support.evidenceTokens,
+      contextEvidence: support.contextTokens,
+      bigrams: support.bigramMatches
     };
   });
 
@@ -401,25 +443,21 @@ function evaluateScript(script) {
     : 100;
 
   const perSource = sources.map((src) => {
-    const tokens = meaningfulTokens(tokenize(src.content || src.label));
-    const sourceSet = new Set(tokens);
-    const overlap = scriptTokens.filter((token) => sourceSet.has(token));
-    const coverageScore = scriptTokens.length
-      ? Math.round((overlap.length / scriptTokens.length) * 100)
-      : 0;
+    const sourceIndex = buildEvidenceIndex(src.content || src.label);
+    const overlapScore = scoreEvidence(scriptTokens, contextualSentenceTokens.flat(), sourceIndex);
     return {
       label: src.label,
       type: src.type,
-      coverage: coverageScore,
-      overlapWords: Array.from(new Set(overlap)).slice(0, 8)
+      coverage: overlapScore.tokenScore,
+      overlapWords: overlapScore.evidenceTokens.slice(0, 8)
     };
   });
 
   return {
     overallCoverage,
     lineCoverage,
-    matchedCount: matchedTokens.length,
-    totalCount: scriptTokens.length,
+    matchedCount: perSentence.filter((s) => s.supported).length,
+    totalCount: perSentence.length,
     unsupportedSentences: unsupportedFactual,
     unsupportedLines: unsupportedFactualLines,
     perSentence,
@@ -526,7 +564,11 @@ function renderReport(channel, title, script, evaluation, narrative) {
           ? '<span class="pill pill--good">supported</span>'
           : '<span class="pill pill--warn">needs evidence</span>'
         : '<span class="pill">narrative</span>';
-      const evidenceText = line.evidence.length ? ` • evidence: ${line.evidence.join(', ')}` : '';
+      const evidencePieces = [];
+      if (line.evidence.length) evidencePieces.push(`evidence: ${line.evidence.join(', ')}`);
+      if (line.contextEvidence?.length) evidencePieces.push(`context: ${line.contextEvidence.join(', ')}`);
+      if (line.bigrams?.length) evidencePieces.push(`phrases: ${line.bigrams.join('; ')}`);
+      const evidenceText = evidencePieces.length ? ` • ${evidencePieces.join(' | ')}` : '';
       return `<li><span class="line-number">${line.lineNumber}</span> ${status}<span class="line-text">${line.text}</span><span class="line-evidence">${evidenceText}</span></li>`;
     })
     .join('');
