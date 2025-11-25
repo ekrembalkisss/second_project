@@ -216,18 +216,59 @@ function runPipeline(channel, title, script) {
   }, 900);
 }
 
-function handleUpload(event) {
+function isDocx(file) {
+  return (
+    file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    file.name.toLowerCase().endsWith('.docx')
+  );
+}
+
+async function extractDocxText(arrayBuffer) {
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  const doc = zip.file('word/document.xml');
+  if (!doc) throw new Error('DOCX missing document.xml');
+  const xmlString = await doc.async('string');
+  const parser = new DOMParser();
+  const xml = parser.parseFromString(xmlString, 'text/xml');
+  const nodes = Array.from(xml.getElementsByTagName('w:t'));
+  const text = nodes
+    .map((node) => node.textContent.trim())
+    .filter(Boolean)
+    .join(' ');
+  return text;
+}
+
+function readFileContent(file) {
+  return new Promise((resolve) => {
+    if (isDocx(file)) {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const text = await extractDocxText(reader.result);
+          resolve({ label: file.name, content: text });
+        } catch (error) {
+          console.error('DOCX extraction failed', error);
+          resolve({ label: `${file.name} (docx extraction failed)`, content: '' });
+        }
+      };
+      reader.readAsArrayBuffer(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => resolve({ label: file.name, content: reader.result || '' });
+    reader.readAsText(file);
+  });
+}
+
+async function handleUpload(event) {
   event.preventDefault();
   const input = document.getElementById('file-input');
   const files = Array.from(input.files || []);
   if (!files.length) return;
-  files.forEach((file) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      addSource('upload', file.name, reader.result || '');
-    };
-    reader.readAsText(file);
-  });
+
+  const uploads = await Promise.all(files.map((file) => readFileContent(file)));
+  uploads.forEach(({ label, content }) => addSource('upload', label, content));
   input.value = '';
 }
 

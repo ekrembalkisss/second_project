@@ -3,7 +3,7 @@
 A lightweight, front-end only scaffold for collecting sources, extracting metadata, and validating channel inputs before running a motion-graphic style analysis pipeline.
 
 ## Features
-- **Source capture:** Upload files, add web search and deep search queries, or paste raw text.
+- **Source capture:** Upload files (including DOCX text extraction), add web search and deep search queries, or paste raw text.
 - **Metadata gate:** Requires metadata extraction before channel name, title, and script inputs are accepted; adding new sources automatically re-locks the details form until metadata is refreshed.
 - **Validation:** Enforces minimum lengths for channel name, title, and script content.
 - **Pipeline visualization:** Motion-graphic inspired progress bar with animated orbital indicator and real-time log updates.
