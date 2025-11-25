@@ -10,10 +10,22 @@ A lightweight, front-end only scaffold for collecting sources, extracting metada
 - **Report output:** Combines user inputs and a human-like analysis narrative grounded in gathered sources.
 
 ## Running locally
-Open `src/index.html` in a browser. No build tooling is required.
+You can open the app directly from the file system or serve it with a lightweight local server—no build step or extra tooling required.
 
-### Can’t find it on your computer?
-1. Note where you placed the project folder (it should be named `second_project`).
-2. Open that folder and navigate into `src/`—you should see `index.html`, `styles.css`, and `main.js`.
-3. Double-click `index.html` (or drag it into a browser window) to launch the app directly. Alternatively, run `python -m http.server 8000 --directory src` from the project root and visit <http://localhost:8000>.
-4. If you don’t see the files, re-extract or re-clone the project, ensuring the path includes the `src/` directory with `index.html` inside.
+### Option A: Open the file directly
+1. Locate the project folder (`second_project`) on your machine.
+2. Open `second_project/src/` and confirm you see `index.html`, `styles.css`, and `main.js`.
+3. Double-click `index.html` (or drag it onto an open browser window). The app will load immediately from the file.
+
+### Option B: Use a simple local server (avoids file:// restrictions some browsers impose)
+1. Open a terminal and change into the project folder:
+   - macOS/Linux: `cd /path/to/second_project`
+   - Windows (PowerShell): `cd "C:\\path\\to\\second_project"`
+2. Start the server from the project root:
+   - macOS/Linux: `python3 -m http.server 8000 --directory src`
+   - Windows (PowerShell): `python -m http.server 8000 --directory src`
+3. Visit <http://localhost:8000> in your browser to use the app.
+
+### If you still can’t find the files
+1. Re-extract or re-clone the project to a known location (e.g., your Desktop or Documents folder).
+2. Repeat the steps above, making sure the `src/` folder contains `index.html`, `styles.css`, and `main.js`.
