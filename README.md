@@ -9,6 +9,12 @@ A lightweight, front-end only scaffold for collecting sources, extracting metada
 - **Pipeline visualization:** Motion-graphic inspired progress bar with animated orbital indicator and real-time log updates.
 - **Accuracy check:** Compares the provided script against captured sources, flagging unsupported sentences and surfacing per-source overlap.
 - **Report output:** Combines user inputs, evidence coverage, and a human-like analysis narrative grounded in gathered sources.
+- **Exports:** Download the latest run as JSON or plain text to reuse results for training or offline review.
+
+## Exporting results
+1. Add sources and run **Extract Metadata**.
+2. Provide channel details and click **Run Analysis Pipeline**.
+3. After the report renders, use **Export JSON** or **Export Text** in the Report section to download the complete run (inputs, metadata, accuracy stats, and pipeline log) in your preferred format.
 
 ## Running locally
 You can open the app directly from the file system or serve it with a lightweight local server—no build step or extra tooling required.

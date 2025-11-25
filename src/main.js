@@ -11,9 +11,14 @@ const channelInput = document.getElementById('channel-name');
 const titleInput = document.getElementById('video-title');
 const scriptInput = document.getElementById('script');
 const detailsSubmit = detailsForm.querySelector('button[type="submit"]');
+const exportJsonButton = document.getElementById('export-json');
+const exportTextButton = document.getElementById('export-text');
 
 let sources = [];
 let metadataReady = false;
+let metadataSnapshot = null;
+let latestResults = null;
+let pipelineLog = [];
 
 function setDetailsEnabled(enabled) {
   [channelInput, titleInput, scriptInput, detailsSubmit].forEach((field) => {
@@ -22,8 +27,20 @@ function setDetailsEnabled(enabled) {
   detailsForm.classList.toggle('locked', !enabled);
 }
 
+function updateExportButtons() {
+  const enabled = Boolean(latestResults);
+  [exportJsonButton, exportTextButton].forEach((btn) => {
+    if (!btn) return;
+    btn.disabled = !enabled;
+    btn.title = enabled ? 'Download the latest analysis results.' : 'Run the pipeline to enable exports.';
+  });
+}
+
 function markMetadataStale(reason) {
   metadataReady = false;
+  metadataSnapshot = null;
+  latestResults = null;
+  updateExportButtons();
   if (reason) {
     metadataResults.innerHTML = `<span class="badge">${reason}</span>`;
   }
@@ -87,14 +104,8 @@ function extractKeyPoints(text, maxItems = 3) {
     .map((sentence) => summarizeText(sentence, 240));
 }
 
-function simulateMetadataExtraction() {
-  if (!sources.length) {
-    metadataResults.innerHTML = '<span class="badge">Add at least one source first.</span>';
-    setDetailsEnabled(false);
-    return;
-  }
-
-  const typeCounts = sources.reduce(
+function buildMetadataSnapshot(currentSources) {
+  const typeCounts = currentSources.reduce(
     (map, src) => {
       map[src.type] = (map[src.type] || 0) + 1;
       map.totalWords += countWords(src.content || src.label);
@@ -103,13 +114,44 @@ function simulateMetadataExtraction() {
     { totalWords: 0 }
   );
 
+  const perSource = currentSources.map((src) => {
+    const text = src.content || src.label;
+    return {
+      id: src.id,
+      label: src.label,
+      type: src.type,
+      words: countWords(text),
+      characters: text.length,
+      keyPoints: extractKeyPoints(text, 4),
+      fullText: text
+    };
+  });
+
+  return {
+    totalSources: currentSources.length,
+    totalWords: typeCounts.totalWords,
+    typeCounts,
+    perSource
+  };
+}
+
+function simulateMetadataExtraction() {
+  if (!sources.length) {
+    metadataResults.innerHTML = '<span class="badge">Add at least one source first.</span>';
+    setDetailsEnabled(false);
+    return;
+  }
+
+  metadataSnapshot = buildMetadataSnapshot(sources);
+  const { typeCounts } = metadataSnapshot;
+
   metadataResults.innerHTML = '';
 
   const summary = document.createElement('div');
   summary.className = 'metadata-summary';
   summary.innerHTML = `
-    <div><strong>${sources.length}</strong> sources scanned</div>
-    <div><strong>${typeCounts.totalWords}</strong> words ingested</div>
+    <div><strong>${metadataSnapshot.totalSources}</strong> sources scanned</div>
+    <div><strong>${metadataSnapshot.totalWords}</strong> words ingested</div>
   `;
   metadataResults.appendChild(summary);
 
@@ -128,7 +170,7 @@ function simulateMetadataExtraction() {
   const cards = document.createElement('div');
   cards.className = 'metadata-cards';
 
-  sources.forEach((src) => {
+  metadataSnapshot.perSource.forEach((src) => {
     const card = document.createElement('div');
     card.className = 'metadata-card';
 
@@ -138,14 +180,12 @@ function simulateMetadataExtraction() {
 
     const stats = document.createElement('div');
     stats.className = 'metadata-card__stats';
-    const words = countWords(src.content || src.label);
-    stats.innerHTML = `Words: ${words} • Characters: ${(src.content || src.label).length}`;
+    stats.innerHTML = `Words: ${src.words} • Characters: ${src.characters}`;
 
-    const keyPoints = extractKeyPoints(src.content || src.label, 3);
     const insights = document.createElement('ul');
     insights.className = 'metadata-card__insights';
-    insights.innerHTML = keyPoints.length
-      ? keyPoints.map((point) => `<li>${point}</li>`).join('')
+    insights.innerHTML = src.keyPoints.length
+      ? src.keyPoints.map((point) => `<li>${point}</li>`).join('')
       : '<li>No textual insights detected.</li>';
 
     const fullText = document.createElement('details');
@@ -153,7 +193,7 @@ function simulateMetadataExtraction() {
     const summaryEl = document.createElement('summary');
     summaryEl.textContent = 'View full extracted text';
     const textBody = document.createElement('div');
-    textBody.textContent = src.content || 'No text extracted from this source.';
+    textBody.textContent = src.fullText || 'No text extracted from this source.';
     fullText.appendChild(summaryEl);
     fullText.appendChild(textBody);
 
@@ -223,6 +263,11 @@ function logEntry(title, body) {
   wrapper.appendChild(heading);
   wrapper.appendChild(content);
   analysisLog.prepend(wrapper);
+  pipelineLog.push({
+    title,
+    body,
+    timestamp: new Date().toISOString()
+  });
 }
 
 function tokenize(text) {
@@ -357,10 +402,92 @@ function renderReport(channel, title, script, evaluation, narrative) {
   report.appendChild(accuracyCard);
 }
 
+function buildTextReport(result) {
+  const lines = [];
+  lines.push('Source Fusion Studio Report');
+  lines.push(`Generated: ${result.generatedAt}`);
+  lines.push('');
+  lines.push(`Channel: ${result.channel}`);
+  lines.push(`Title: ${result.title}`);
+  lines.push('');
+  lines.push('Script:');
+  lines.push(result.script);
+  lines.push('');
+  lines.push('Narrative:');
+  lines.push(result.narrative);
+  lines.push('');
+  lines.push('Accuracy');
+  lines.push(
+    `Coverage: ${result.evaluation.overallCoverage}% (${result.evaluation.matchedCount}/${result.evaluation.totalCount || 1} tokens aligned)`
+  );
+  lines.push('Unsupported sentences:');
+  if (result.evaluation.unsupportedSentences.length) {
+    result.evaluation.unsupportedSentences.forEach((sentence, idx) => {
+      lines.push(`  ${idx + 1}. ${sentence}`);
+    });
+  } else {
+    lines.push('  All sentences show overlap with captured sources.');
+  }
+  lines.push('');
+  lines.push('Per-source overlap:');
+  result.evaluation.perSource.forEach((entry) => {
+    lines.push(
+      `  - ${entry.label} [${entry.type}]: ${entry.coverage}% overlap; tokens: ${entry.overlapWords.join(', ') || 'none'}`
+    );
+  });
+  lines.push('');
+  lines.push('Metadata snapshot:');
+  lines.push(`  Sources scanned: ${result.metadata?.totalSources || 0}`);
+  lines.push(`  Words ingested: ${result.metadata?.totalWords || 0}`);
+  if (result.metadata?.perSource?.length) {
+    result.metadata.perSource.forEach((src) => {
+      lines.push(
+        `  * ${src.label} (${src.type}) — ${src.words} words, ${src.characters} chars; key points: ${src.keyPoints.join(' | ') || 'none'}`
+      );
+    });
+  }
+  lines.push('');
+  lines.push('Pipeline log:');
+  if (result.pipelineLog.length) {
+    result.pipelineLog.forEach((entry) => {
+      lines.push(`  - [${entry.timestamp}] ${entry.title}: ${entry.body}`);
+    });
+  } else {
+    lines.push('  No pipeline entries recorded.');
+  }
+
+  return lines.join('\n');
+}
+
+function downloadFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportResultsAsJSON() {
+  if (!latestResults) return;
+  const payload = JSON.stringify(latestResults, null, 2);
+  downloadFile(payload, 'source-fusion-report.json', 'application/json');
+}
+
+function exportResultsAsText() {
+  if (!latestResults) return;
+  const textReport = buildTextReport(latestResults);
+  downloadFile(textReport, 'source-fusion-report.txt', 'text/plain');
+}
+
 function runPipeline(channel, title, script) {
   const evaluation = evaluateScript(script);
   const narrative = buildNarrative(channel, title, script, evaluation);
   analysisLog.innerHTML = '';
+  pipelineLog = [];
+  latestResults = null;
+  updateExportButtons();
   renderSteps(0);
   progressFill.style.width = '0%';
 
@@ -382,6 +509,18 @@ function runPipeline(channel, title, script) {
       clearInterval(interval);
       logEntry('Narrative Ready', narrative);
       renderReport(channel, title, script, evaluation, narrative);
+      latestResults = {
+        generatedAt: new Date().toISOString(),
+        channel,
+        title,
+        script,
+        narrative,
+        evaluation,
+        metadata: metadataSnapshot,
+        sources: sources.map((src) => ({ ...src })),
+        pipelineLog: pipelineLog.map((entry) => ({ ...entry }))
+      };
+      updateExportButtons();
     }
     current += 1;
   }, 900);
@@ -473,6 +612,8 @@ function bindEvents() {
   document.getElementById('deep-search-form').addEventListener('submit', handleDeepSearch);
   document.getElementById('paste-form').addEventListener('submit', handlePaste);
   extractButton.addEventListener('click', simulateMetadataExtraction);
+  exportJsonButton.addEventListener('click', exportResultsAsJSON);
+  exportTextButton.addEventListener('click', exportResultsAsText);
 
   detailsForm.addEventListener('submit', (event) => {
     event.preventDefault();
