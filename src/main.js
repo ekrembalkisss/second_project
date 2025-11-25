@@ -83,6 +83,43 @@ function summarizeText(text, maxLength = 160) {
   return `${text.slice(0, maxLength)}...`;
 }
 
+function isNarrativeExpression(sentence) {
+  const expressivePhrases = [
+    'wow',
+    'haha',
+    'lol',
+    'poor guy',
+    'genius',
+    'what a moment',
+    'go on, guess',
+    'that\'s wild',
+    'i am jealous',
+    'poof',
+    'shadow dimension',
+    'portal opened'
+  ];
+
+  const normalized = sentence.toLowerCase();
+  return expressivePhrases.some((phrase) => normalized.includes(phrase));
+}
+
+function isFactualSentence(sentence) {
+  if (!sentence || sentence.split(/\s+/).length < 5) return false;
+  if (isNarrativeExpression(sentence)) return false;
+
+  const numericPattern = /\b\d+(?:\.\d+)?%?|one|two|three|four|five|six|seven|eight|nine|ten|dozen/i;
+  const temporalPattern = /\b(\d{3,4}|january|february|march|april|may|june|july|august|september|october|november|december)\b/i;
+  const measurementPattern = /\b(km|kilometers|miles|meters|degrees|percent|population|billion|million|thousand)\b/i;
+  const factualVerbs = /\b(is|are|was|were|has|have|contains|equals|located|signed|founded)\b/i;
+
+  return (
+    numericPattern.test(sentence) ||
+    temporalPattern.test(sentence) ||
+    measurementPattern.test(sentence) ||
+    factualVerbs.test(sentence)
+  );
+}
+
 function countWords(text) {
   if (!text) return 0;
   return text.trim().split(/\s+/).filter(Boolean).length;
@@ -282,23 +319,26 @@ function evaluateScript(script) {
   const sourceTokenSet = new Set(sourceTokens);
 
   const matchedTokens = scriptTokens.filter((token) => sourceTokenSet.has(token));
-  const coverage = scriptTokens.length
-    ? Math.round((matchedTokens.length / scriptTokens.length) * 100)
-    : 0;
-
   const perSentence = scriptSentences.map((sentence) => {
     const tokens = tokenize(sentence);
     const matches = tokens.filter((token) => sourceTokenSet.has(token));
     const ratio = tokens.length ? matches.length / tokens.length : 0;
+    const factual = isFactualSentence(sentence);
     return {
       sentence,
-      supported: ratio >= 0.35 && matches.length >= 2,
+      isFactual: factual,
+      supported: factual ? ratio >= 0.35 && matches.length >= 2 : true,
       matchRatio: Math.round(ratio * 100),
-      evidence: matches.slice(0, 8)
+      evidence: matches.slice(0, 10)
     };
   });
 
-  const unsupportedSentences = perSentence.filter((item) => !item.supported).map((item) => item.sentence);
+  const factualSentences = perSentence.filter((item) => item.isFactual);
+  const unsupportedFactual = factualSentences.filter((item) => !item.supported).map((item) => item.sentence);
+
+  const overallCoverage = factualSentences.length
+    ? Math.round(((factualSentences.length - unsupportedFactual.length) / factualSentences.length) * 100)
+    : 100;
 
   const perSource = sources.map((src) => {
     const tokens = tokenize(src.content || src.label);
@@ -316,20 +356,21 @@ function evaluateScript(script) {
   });
 
   return {
-    overallCoverage: coverage,
+    overallCoverage,
     matchedCount: matchedTokens.length,
     totalCount: scriptTokens.length,
-    unsupportedSentences,
+    unsupportedSentences: unsupportedFactual,
     perSentence,
-    perSource
+    perSource,
+    factualSentenceCount: factualSentences.length
   };
 }
 
 function buildNarrative(channel, title, script, evaluation) {
-  const coverageLine = `Evidence coverage: ${evaluation.overallCoverage}% of script tokens backed by captured sources.`;
+  const coverageLine = `Evidence coverage: ${evaluation.overallCoverage}% of factual sentences show source support.`;
   const unsupportedLine = evaluation.unsupportedSentences.length
-    ? `Flagged sentences (${evaluation.unsupportedSentences.length}) need citations.`
-    : 'All script sentences found matching evidence tokens.';
+    ? `Flagged factual sentences (${evaluation.unsupportedSentences.length}) need citations.`
+    : 'All detected factual sentences show overlap with captured sources.';
   return [
     `Channel "${channel}" explores "${title}" with human-like, curious narration.`,
     `Script summary: ${summarizeText(script, 240)}`,
@@ -363,20 +404,25 @@ function renderReport(channel, title, script, evaluation, narrative) {
   accuracyCard.className = 'report-card report-card--accuracy';
   const header = document.createElement('div');
   header.className = 'accuracy-header';
-  header.innerHTML = `<h4>Script Accuracy Check</h4><span class="badge">${evaluation.overallCoverage}% coverage</span>`;
+  header.innerHTML = `<h4>Script Accuracy Check</h4><span class="badge">${evaluation.overallCoverage}% factual coverage</span>`;
 
   const coverageStats = document.createElement('p');
   coverageStats.className = 'muted';
-  coverageStats.textContent = `${evaluation.matchedCount}/${evaluation.totalCount || 1} script tokens aligned with sources.`;
+  if (evaluation.factualSentenceCount) {
+    const supportedCount = evaluation.factualSentenceCount - evaluation.unsupportedSentences.length;
+    coverageStats.textContent = `${supportedCount}/${evaluation.factualSentenceCount} factual sentences show evidence overlap.`;
+  } else {
+    coverageStats.textContent = 'No factual sentences detected — narrative-only content.';
+  }
 
   const unsupported = document.createElement('div');
   unsupported.className = 'unsupported-block';
-  unsupported.innerHTML = `<strong>Flagged sentences (${evaluation.unsupportedSentences.length}):</strong>`;
+  unsupported.innerHTML = `<strong>Flagged factual sentences (${evaluation.unsupportedSentences.length}):</strong>`;
   const list = document.createElement('ul');
   list.className = 'unsupported-list';
   list.innerHTML = evaluation.unsupportedSentences.length
     ? evaluation.unsupportedSentences.map((sentence) => `<li>${sentence}</li>`).join('')
-    : '<li>All sentences show evidence overlap.</li>';
+    : '<li>All detected factual sentences show evidence overlap.</li>';
   unsupported.appendChild(list);
 
   const sourceGrid = document.createElement('div');
@@ -417,16 +463,19 @@ function buildTextReport(result) {
   lines.push(result.narrative);
   lines.push('');
   lines.push('Accuracy');
+  const supportedCount = result.evaluation.factualSentenceCount - result.evaluation.unsupportedSentences.length;
   lines.push(
-    `Coverage: ${result.evaluation.overallCoverage}% (${result.evaluation.matchedCount}/${result.evaluation.totalCount || 1} tokens aligned)`
+    `Coverage: ${result.evaluation.overallCoverage}% factual support (${supportedCount}/${
+      result.evaluation.factualSentenceCount || 0
+    } sentences backed)`
   );
-  lines.push('Unsupported sentences:');
+  lines.push('Flagged factual sentences:');
   if (result.evaluation.unsupportedSentences.length) {
     result.evaluation.unsupportedSentences.forEach((sentence, idx) => {
       lines.push(`  ${idx + 1}. ${sentence}`);
     });
   } else {
-    lines.push('  All sentences show overlap with captured sources.');
+    lines.push('  No factual sentences missing evidence.');
   }
   lines.push('');
   lines.push('Per-source overlap:');
@@ -493,8 +542,16 @@ function runPipeline(channel, title, script) {
 
   const steps = [
     () => logEntry('Source prep', 'Clustering uploads, queries, and pasted text for quick lookup.'),
-    () => logEntry('Script alignment', `Checking script tokens against captured sources. Coverage: ${evaluation.overallCoverage}%.`),
-    () => logEntry('Evidence flags', `${evaluation.unsupportedSentences.length} sentences need stronger sourcing.`),
+    () =>
+      logEntry(
+        'Script alignment',
+        `Checking factual sentences against captured sources. Coverage: ${evaluation.overallCoverage}%.`
+      ),
+    () =>
+      logEntry(
+        'Evidence flags',
+        `${evaluation.unsupportedSentences.length} factual sentences need stronger sourcing.`
+      ),
     () => logEntry('Report assembly', 'Merging channel inputs, accuracy checks, and narrative into a ready-to-share report.')
   ];
 

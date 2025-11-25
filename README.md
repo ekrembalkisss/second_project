@@ -7,9 +7,14 @@ A lightweight, front-end only scaffold for collecting sources, extracting metada
 - **Metadata gate:** Requires metadata extraction before channel name, title, and script inputs are accepted; adding new sources automatically re-locks the details form until metadata is refreshed. Extraction now scans full source text, surfaces per-source word counts, key takeaways, and full-text previews.
 - **Validation:** Enforces minimum lengths for channel name, title, and script content.
 - **Pipeline visualization:** Motion-graphic inspired progress bar with animated orbital indicator and real-time log updates.
-- **Accuracy check:** Compares the provided script against captured sources, flagging unsupported sentences and surfacing per-source overlap.
+- **Fact-aware accuracy check:** Detects factual sentences (ignoring humor, fiction, or expressive lines), measures coverage against captured sources, and flags only factual statements lacking evidence.
 - **Report output:** Combines user inputs, evidence coverage, and a human-like analysis narrative grounded in gathered sources.
 - **Exports:** Download the latest run as JSON or plain text to reuse results for training or offline review.
+
+## Factual accuracy logic
+- Only sentences containing verifiable claims (numbers, dates, measurements, or declarative fact verbs) are checked for evidence.
+- Expressive, humorous, fictional, or very short lines are treated as narrative and never flagged.
+- Coverage represents the share of factual sentences that show overlap with captured sources; the flagged list contains only factual sentences missing evidence.
 
 ## Exporting results
 1. Add sources and run **Extract Metadata**.
