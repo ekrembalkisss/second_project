@@ -8,15 +8,15 @@ A lightweight, front-end only scaffold for collecting sources, extracting metada
 - **Validation:** Enforces minimum lengths for channel name, title, and script content.
 - **Pipeline visualization:** Motion-graphic inspired progress bar with animated orbital indicator and real-time log updates.
 - **Fact-aware accuracy check:** Detects factual sentences (ignoring humor, fiction, or expressive lines), measures coverage against captured sources, and flags only factual statements lacking evidence.
-- **Line-by-line scanning:** Every script line is checked for factual claims and evidence overlap so no context is skipped.
+- **Contextual, line-by-line scanning:** Every script line is checked with its neighboring context for factual claims and evidence overlap so no surrounding details are skipped.
 - **Report output:** Combines user inputs, evidence coverage, and a human-like analysis narrative grounded in gathered sources.
 - **Exports:** Download the latest run as JSON or plain text to reuse results for training or offline review.
 
 ## Factual accuracy logic
 - Only sentences containing verifiable claims (numbers, dates, measurements, or declarative fact verbs) are checked for evidence.
 - Expressive, humorous, fictional, or very short lines are treated as narrative and never flagged.
-- Coverage represents the share of factual sentences that show overlap with captured sources; the flagged list contains only factual sentences missing evidence.
-- Evidence matching ignores stopwords and requires several meaningful token overlaps so generic wording alone cannot mark a line as supported.
+- Coverage represents the share of factual sentences (and a separate factual line score) that show overlap with captured sources; the flagged lists contain only factual sentences/lines missing evidence.
+- Evidence matching ignores stopwords, looks at neighboring context, and requires several meaningful token overlaps so generic wording alone cannot mark a line as supported.
 
 ## Exporting results
 1. Add sources and run **Extract Metadata**.

@@ -342,34 +342,49 @@ function evaluateScript(script) {
   const sourceTokenSet = new Set(sourceTokens);
 
   const matchedTokens = scriptTokens.filter((token) => sourceTokenSet.has(token));
-  const perSentence = scriptSentences.map((sentence) => {
+
+  const contextualSentenceTokens = scriptSentences.map((sentence, index) => {
+    const neighborWindow = [scriptSentences[index - 1], sentence, scriptSentences[index + 1]]
+      .filter(Boolean)
+      .join(' ');
+    return meaningfulTokens(tokenize(neighborWindow));
+  });
+
+  const perSentence = scriptSentences.map((sentence, index) => {
     const tokens = meaningfulTokens(tokenize(sentence));
+    const contextTokens = contextualSentenceTokens[index];
     const matches = tokens.filter((token) => sourceTokenSet.has(token));
+    const contextMatches = contextTokens.filter((token) => sourceTokenSet.has(token));
     const ratio = tokens.length ? matches.length / tokens.length : 0;
+    const combinedEvidence = Array.from(new Set([...matches, ...contextMatches]));
     const factual = isFactualSentence(sentence);
     return {
       sentence,
       isFactual: factual,
-      supported: factual ? ratio >= 0.35 && matches.length >= 3 : true,
+      supported: factual ? (ratio >= 0.35 && matches.length >= 3) || combinedEvidence.length >= 6 : true,
       matchRatio: Math.round(ratio * 100),
-      evidence: matches.slice(0, 10)
+      evidence: combinedEvidence.slice(0, 12)
     };
   });
 
   const perLine = scriptLines.map((line, index) => {
+    const neighborWindow = [scriptLines[index - 1], line, scriptLines[index + 1]].filter(Boolean).join(' ');
     const lineTokens = meaningfulTokens(tokenize(line));
+    const contextTokens = meaningfulTokens(tokenize(neighborWindow));
     const matches = lineTokens.filter((token) => sourceTokenSet.has(token));
+    const contextMatches = contextTokens.filter((token) => sourceTokenSet.has(token));
     const ratio = lineTokens.length ? matches.length / lineTokens.length : 0;
     const lineSentences = extractSentences(line);
     const lineIsFactual =
       lineSentences.some((sentence) => isFactualSentence(sentence)) || isFactualSentence(line);
+    const combinedEvidence = Array.from(new Set([...matches, ...contextMatches]));
     return {
       lineNumber: index + 1,
       text: line,
       isFactual: lineIsFactual,
-      supported: lineIsFactual ? ratio >= 0.35 && matches.length >= 3 : true,
+      supported: lineIsFactual ? (ratio >= 0.35 && matches.length >= 3) || combinedEvidence.length >= 6 : true,
       matchRatio: Math.round(ratio * 100),
-      evidence: Array.from(new Set(matches)).slice(0, 12)
+      evidence: combinedEvidence.slice(0, 12)
     };
   });
 
@@ -380,6 +395,9 @@ function evaluateScript(script) {
 
   const overallCoverage = factualSentences.length
     ? Math.round(((factualSentences.length - unsupportedFactual.length) / factualSentences.length) * 100)
+    : 100;
+  const lineCoverage = factualLines.length
+    ? Math.round(((factualLines.length - unsupportedFactualLines.length) / factualLines.length) * 100)
     : 100;
 
   const perSource = sources.map((src) => {
@@ -399,6 +417,7 @@ function evaluateScript(script) {
 
   return {
     overallCoverage,
+    lineCoverage,
     matchedCount: matchedTokens.length,
     totalCount: scriptTokens.length,
     unsupportedSentences: unsupportedFactual,
@@ -449,13 +468,23 @@ function renderReport(channel, title, script, evaluation, narrative) {
   accuracyCard.className = 'report-card report-card--accuracy';
   const header = document.createElement('div');
   header.className = 'accuracy-header';
-  header.innerHTML = `<h4>Script Accuracy Check</h4><span class="badge">${evaluation.overallCoverage}% factual coverage</span>`;
+  header.innerHTML = `
+    <h4>Script Accuracy Check</h4>
+    <div class="badge-row">
+      <span class="badge">${evaluation.overallCoverage}% factual sentence coverage</span>
+      <span class="badge badge--ghost">${evaluation.lineCoverage}% factual line coverage</span>
+    </div>
+  `;
 
   const coverageStats = document.createElement('p');
   coverageStats.className = 'muted';
   if (evaluation.factualSentenceCount) {
-    const supportedCount = evaluation.factualSentenceCount - evaluation.unsupportedSentences.length;
-    coverageStats.textContent = `${supportedCount}/${evaluation.factualSentenceCount} factual sentences show evidence overlap.`;
+    const supportedSentenceCount = evaluation.factualSentenceCount - evaluation.unsupportedSentences.length;
+    const supportedLineCount = evaluation.factualLineCount - evaluation.unsupportedLines.length;
+    const lineCopy = evaluation.factualLineCount
+      ? ` • ${supportedLineCount}/${evaluation.factualLineCount} factual lines supported`
+      : '';
+    coverageStats.textContent = `${supportedSentenceCount}/${evaluation.factualSentenceCount} factual sentences supported${lineCopy}.`;
   } else {
     coverageStats.textContent = 'No factual sentences detected — narrative-only content.';
   }
@@ -469,6 +498,16 @@ function renderReport(channel, title, script, evaluation, narrative) {
     ? evaluation.unsupportedSentences.map((sentence) => `<li>${sentence}</li>`).join('')
     : '<li>All detected factual sentences show evidence overlap.</li>';
   unsupported.appendChild(list);
+
+  const unsupportedLines = document.createElement('div');
+  unsupportedLines.className = 'unsupported-block';
+  unsupportedLines.innerHTML = `<strong>Flagged factual lines (${evaluation.unsupportedLines.length}):</strong>`;
+  const lineListUnsupported = document.createElement('ul');
+  lineListUnsupported.className = 'unsupported-list';
+  lineListUnsupported.innerHTML = evaluation.unsupportedLines.length
+    ? evaluation.unsupportedLines.map((line) => `<li>${line}</li>`).join('')
+    : '<li>All detected factual lines show evidence overlap.</li>';
+  unsupportedLines.appendChild(lineListUnsupported);
 
   const lineCheck = document.createElement('div');
   lineCheck.className = 'line-review';
@@ -512,6 +551,7 @@ function renderReport(channel, title, script, evaluation, narrative) {
   accuracyCard.appendChild(header);
   accuracyCard.appendChild(coverageStats);
   accuracyCard.appendChild(unsupported);
+  accuracyCard.appendChild(unsupportedLines);
   accuracyCard.appendChild(lineCheck);
   accuracyCard.appendChild(sourceGrid);
   report.appendChild(accuracyCard);
@@ -532,11 +572,14 @@ function buildTextReport(result) {
   lines.push(result.narrative);
   lines.push('');
   lines.push('Accuracy');
-  const supportedCount = result.evaluation.factualSentenceCount - result.evaluation.unsupportedSentences.length;
+  const supportedSentenceCount = result.evaluation.factualSentenceCount - result.evaluation.unsupportedSentences.length;
+  const supportedLineCount = result.evaluation.factualLineCount - result.evaluation.unsupportedLines.length;
   lines.push(
-    `Coverage: ${result.evaluation.overallCoverage}% factual support (${supportedCount}/${
+    `Coverage: ${result.evaluation.overallCoverage}% factual sentences (${supportedSentenceCount}/${
       result.evaluation.factualSentenceCount || 0
-    } sentences backed)`
+    } supported); ${result.evaluation.lineCoverage}% factual lines (${supportedLineCount}/${
+      result.evaluation.factualLineCount || 0
+    } supported)`
   );
   lines.push('Flagged factual sentences:');
   if (result.evaluation.unsupportedSentences.length) {
@@ -545,6 +588,14 @@ function buildTextReport(result) {
     });
   } else {
     lines.push('  No factual sentences missing evidence.');
+  }
+  lines.push('Flagged factual lines:');
+  if (result.evaluation.unsupportedLines.length) {
+    result.evaluation.unsupportedLines.forEach((line, idx) => {
+      lines.push(`  ${idx + 1}. ${line}`);
+    });
+  } else {
+    lines.push('  No factual lines missing evidence.');
   }
   lines.push('Line-by-line scan:');
   result.evaluation.perLine.forEach((line) => {
@@ -620,7 +671,7 @@ function runPipeline(channel, title, script) {
     () =>
       logEntry(
         'Script alignment',
-        `Scanning every script line for factual claims and evidence overlap. Coverage: ${evaluation.overallCoverage}%.`
+        `Scanning every script line for factual claims and evidence overlap. Coverage: sentences ${evaluation.overallCoverage}%, lines ${evaluation.lineCoverage}%.`
       ),
     () =>
       logEntry(

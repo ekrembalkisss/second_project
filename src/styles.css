@@ -188,6 +188,17 @@ main {
   font-size: 0.85rem;
 }
 
+.badge--ghost {
+  background: rgba(102, 224, 255, 0.04);
+  border-color: rgba(102, 224, 255, 0.12);
+}
+
+.badge-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .metadata-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
