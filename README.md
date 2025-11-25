@@ -7,7 +7,8 @@ A lightweight, front-end only scaffold for collecting sources, extracting metada
 - **Metadata gate:** Requires metadata extraction before channel name, title, and script inputs are accepted; adding new sources automatically re-locks the details form until metadata is refreshed. Extraction now scans full source text, surfaces per-source word counts, key takeaways, and full-text previews.
 - **Validation:** Enforces minimum lengths for channel name, title, and script content.
 - **Pipeline visualization:** Motion-graphic inspired progress bar with animated orbital indicator and real-time log updates.
-- **Report output:** Combines user inputs and a human-like analysis narrative grounded in gathered sources.
+- **Accuracy check:** Compares the provided script against captured sources, flagging unsupported sentences and surfacing per-source overlap.
+- **Report output:** Combines user inputs, evidence coverage, and a human-like analysis narrative grounded in gathered sources.
 
 ## Running locally
 You can open the app directly from the file system or serve it with a lightweight local server—no build step or extra tooling required.

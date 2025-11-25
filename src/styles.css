@@ -395,6 +395,69 @@ main {
   margin: 0 0 0.25rem;
 }
 
+.report-card--accuracy {
+  border-color: rgba(102, 224, 255, 0.25);
+  background: linear-gradient(145deg, rgba(102, 224, 255, 0.06), rgba(184, 137, 255, 0.05));
+}
+
+.accuracy-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.unsupported-block {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(102, 224, 255, 0.12);
+  border-radius: 8px;
+  padding: 0.6rem;
+  margin: 0.5rem 0;
+}
+
+.unsupported-list {
+  margin: 0.35rem 0 0;
+  padding-left: 1.2rem;
+  color: rgba(255, 255, 255, 0.88);
+  display: grid;
+  gap: 0.35rem;
+}
+
+.source-coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.6rem;
+}
+
+.coverage-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.coverage-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.coverage-score {
+  font-weight: 700;
+}
+
+.coverage-evidence {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
 @media (max-width: 768px) {
   body {
     padding: 0 0.75rem 1.5rem;

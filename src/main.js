@@ -225,18 +225,75 @@ function logEntry(title, body) {
   analysisLog.prepend(wrapper);
 }
 
-function buildNarrative(channel, title, script) {
-  const coverage = sources.map((src) => `${src.type}: ${src.label}`).join(' | ');
-  const tone = 'human-like, curious, and explanatory';
+function tokenize(text) {
+  return (text.toLowerCase().match(/[a-z0-9]+/g) || []).filter((word) => word.length > 2);
+}
+
+function evaluateScript(script) {
+  const scriptTokens = tokenize(script);
+  const scriptSentences = extractSentences(script);
+  const aggregateText = sources.map((src) => src.content || src.label).join(' ');
+  const sourceTokens = tokenize(aggregateText);
+  const sourceTokenSet = new Set(sourceTokens);
+
+  const matchedTokens = scriptTokens.filter((token) => sourceTokenSet.has(token));
+  const coverage = scriptTokens.length
+    ? Math.round((matchedTokens.length / scriptTokens.length) * 100)
+    : 0;
+
+  const perSentence = scriptSentences.map((sentence) => {
+    const tokens = tokenize(sentence);
+    const matches = tokens.filter((token) => sourceTokenSet.has(token));
+    const ratio = tokens.length ? matches.length / tokens.length : 0;
+    return {
+      sentence,
+      supported: ratio >= 0.35 && matches.length >= 2,
+      matchRatio: Math.round(ratio * 100),
+      evidence: matches.slice(0, 8)
+    };
+  });
+
+  const unsupportedSentences = perSentence.filter((item) => !item.supported).map((item) => item.sentence);
+
+  const perSource = sources.map((src) => {
+    const tokens = tokenize(src.content || src.label);
+    const sourceSet = new Set(tokens);
+    const overlap = scriptTokens.filter((token) => sourceSet.has(token));
+    const coverageScore = scriptTokens.length
+      ? Math.round((overlap.length / scriptTokens.length) * 100)
+      : 0;
+    return {
+      label: src.label,
+      type: src.type,
+      coverage: coverageScore,
+      overlapWords: Array.from(new Set(overlap)).slice(0, 8)
+    };
+  });
+
+  return {
+    overallCoverage: coverage,
+    matchedCount: matchedTokens.length,
+    totalCount: scriptTokens.length,
+    unsupportedSentences,
+    perSentence,
+    perSource
+  };
+}
+
+function buildNarrative(channel, title, script, evaluation) {
+  const coverageLine = `Evidence coverage: ${evaluation.overallCoverage}% of script tokens backed by captured sources.`;
+  const unsupportedLine = evaluation.unsupportedSentences.length
+    ? `Flagged sentences (${evaluation.unsupportedSentences.length}) need citations.`
+    : 'All script sentences found matching evidence tokens.';
   return [
-    `Channel "${channel}" explores "${title}" with ${tone} commentary.`,
+    `Channel "${channel}" explores "${title}" with human-like, curious narration.`,
     `Script summary: ${summarizeText(script, 240)}`,
-    `Sources referenced: ${coverage || 'No sources recorded.'}`,
-    'Alignment check: main talking points echo uploaded, searched, and pasted evidence with clear transitions.'
+    coverageLine,
+    unsupportedLine
   ].join(' ');
 }
 
-function renderReport(channel, title, script, narrative) {
+function renderReport(channel, title, script, evaluation, narrative) {
   report.innerHTML = '';
   const cards = [
     { heading: 'Channel Name', value: channel },
@@ -256,19 +313,62 @@ function renderReport(channel, title, script, narrative) {
     div.appendChild(p);
     report.appendChild(div);
   });
+
+  const accuracyCard = document.createElement('div');
+  accuracyCard.className = 'report-card report-card--accuracy';
+  const header = document.createElement('div');
+  header.className = 'accuracy-header';
+  header.innerHTML = `<h4>Script Accuracy Check</h4><span class="badge">${evaluation.overallCoverage}% coverage</span>`;
+
+  const coverageStats = document.createElement('p');
+  coverageStats.className = 'muted';
+  coverageStats.textContent = `${evaluation.matchedCount}/${evaluation.totalCount || 1} script tokens aligned with sources.`;
+
+  const unsupported = document.createElement('div');
+  unsupported.className = 'unsupported-block';
+  unsupported.innerHTML = `<strong>Flagged sentences (${evaluation.unsupportedSentences.length}):</strong>`;
+  const list = document.createElement('ul');
+  list.className = 'unsupported-list';
+  list.innerHTML = evaluation.unsupportedSentences.length
+    ? evaluation.unsupportedSentences.map((sentence) => `<li>${sentence}</li>`).join('')
+    : '<li>All sentences show evidence overlap.</li>';
+  unsupported.appendChild(list);
+
+  const sourceGrid = document.createElement('div');
+  sourceGrid.className = 'source-coverage-grid';
+  evaluation.perSource.forEach((item) => {
+    const card = document.createElement('div');
+    card.className = 'coverage-card';
+    card.innerHTML = `
+      <div class="coverage-heading">
+        <strong>${item.label}</strong>
+        <span class="badge">${item.type}</span>
+      </div>
+      <div class="coverage-score">${item.coverage}% script overlap</div>
+      <div class="coverage-evidence">${item.overlapWords.length ? 'Evidence tokens: ' + item.overlapWords.join(', ') : 'No overlap detected'}</div>
+    `;
+    sourceGrid.appendChild(card);
+  });
+
+  accuracyCard.appendChild(header);
+  accuracyCard.appendChild(coverageStats);
+  accuracyCard.appendChild(unsupported);
+  accuracyCard.appendChild(sourceGrid);
+  report.appendChild(accuracyCard);
 }
 
 function runPipeline(channel, title, script) {
-  const narrative = buildNarrative(channel, title, script);
+  const evaluation = evaluateScript(script);
+  const narrative = buildNarrative(channel, title, script, evaluation);
   analysisLog.innerHTML = '';
   renderSteps(0);
   progressFill.style.width = '0%';
 
   const steps = [
     () => logEntry('Source prep', 'Clustering uploads, queries, and pasted text for quick lookup.'),
-    () => logEntry('Script alignment', 'Highlighting overlaps and gaps between the script and gathered references.'),
-    () => logEntry('Human-like insights', 'Crafting connective language and natural pacing for the voiceover.'),
-    () => logEntry('Report assembly', 'Merging channel inputs and analysis into a ready-to-share report.')
+    () => logEntry('Script alignment', `Checking script tokens against captured sources. Coverage: ${evaluation.overallCoverage}%.`),
+    () => logEntry('Evidence flags', `${evaluation.unsupportedSentences.length} sentences need stronger sourcing.`),
+    () => logEntry('Report assembly', 'Merging channel inputs, accuracy checks, and narrative into a ready-to-share report.')
   ];
 
   let current = 0;
@@ -281,7 +381,7 @@ function runPipeline(channel, title, script) {
     if (current === steps.length - 1) {
       clearInterval(interval);
       logEntry('Narrative Ready', narrative);
-      renderReport(channel, title, script, narrative);
+      renderReport(channel, title, script, evaluation, narrative);
     }
     current += 1;
   }, 900);
