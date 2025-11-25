@@ -16,6 +16,7 @@ A lightweight, front-end only scaffold for collecting sources, extracting metada
 - Only sentences containing verifiable claims (numbers, dates, measurements, or declarative fact verbs) are checked for evidence.
 - Expressive, humorous, fictional, or very short lines are treated as narrative and never flagged.
 - Coverage represents the share of factual sentences that show overlap with captured sources; the flagged list contains only factual sentences missing evidence.
+- Evidence matching ignores stopwords and requires several meaningful token overlaps so generic wording alone cannot mark a line as supported.
 
 ## Exporting results
 1. Add sources and run **Extract Metadata**.

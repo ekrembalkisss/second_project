@@ -314,35 +314,50 @@ function logEntry(title, body) {
   });
 }
 
+const STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'this', 'that', 'have', 'has', 'are', 'was', 'were', 'you', 'your',
+  'but', 'they', 'them', 'their', 'about', 'into', 'from', 'will', 'would', 'could', 'should', 'can',
+  'all', 'any', 'per', 'each', 'over', 'under', 'than', 'into', 'onto', 'onto', 'which', 'when',
+  'been', 'being', 'because', 'what', 'where', 'while', 'also', 'just', 'only', 'still', 'even',
+  'then', 'does', 'did', 'done', 'its', 'our', 'out', 'his', 'her', 'him', 'she', 'himself', 'herself',
+  'who', 'whom', 'why', 'how', 'not', 'no', 'yes', 'yet', 'very', 'much', 'more', 'most', 'some',
+  'other', 'another', 'such', 'like'
+]);
+
 function tokenize(text) {
   return (text.toLowerCase().match(/[a-z0-9]+/g) || []).filter((word) => word.length > 2);
 }
 
+function meaningfulTokens(tokens) {
+  return tokens.filter((token) => !STOPWORDS.has(token));
+}
+
 function evaluateScript(script) {
-  const scriptTokens = tokenize(script);
+  const rawScriptTokens = tokenize(script);
+  const scriptTokens = meaningfulTokens(rawScriptTokens);
   const scriptSentences = extractSentences(script);
   const scriptLines = extractLines(script);
   const aggregateText = sources.map((src) => src.content || src.label).join(' ');
-  const sourceTokens = tokenize(aggregateText);
+  const sourceTokens = meaningfulTokens(tokenize(aggregateText));
   const sourceTokenSet = new Set(sourceTokens);
 
   const matchedTokens = scriptTokens.filter((token) => sourceTokenSet.has(token));
   const perSentence = scriptSentences.map((sentence) => {
-    const tokens = tokenize(sentence);
+    const tokens = meaningfulTokens(tokenize(sentence));
     const matches = tokens.filter((token) => sourceTokenSet.has(token));
     const ratio = tokens.length ? matches.length / tokens.length : 0;
     const factual = isFactualSentence(sentence);
     return {
       sentence,
       isFactual: factual,
-      supported: factual ? ratio >= 0.35 && matches.length >= 2 : true,
+      supported: factual ? ratio >= 0.35 && matches.length >= 3 : true,
       matchRatio: Math.round(ratio * 100),
       evidence: matches.slice(0, 10)
     };
   });
 
   const perLine = scriptLines.map((line, index) => {
-    const lineTokens = tokenize(line);
+    const lineTokens = meaningfulTokens(tokenize(line));
     const matches = lineTokens.filter((token) => sourceTokenSet.has(token));
     const ratio = lineTokens.length ? matches.length / lineTokens.length : 0;
     const lineSentences = extractSentences(line);
@@ -352,7 +367,7 @@ function evaluateScript(script) {
       lineNumber: index + 1,
       text: line,
       isFactual: lineIsFactual,
-      supported: lineIsFactual ? ratio >= 0.35 && matches.length >= 2 : true,
+      supported: lineIsFactual ? ratio >= 0.35 && matches.length >= 3 : true,
       matchRatio: Math.round(ratio * 100),
       evidence: Array.from(new Set(matches)).slice(0, 12)
     };
@@ -368,7 +383,7 @@ function evaluateScript(script) {
     : 100;
 
   const perSource = sources.map((src) => {
-    const tokens = tokenize(src.content || src.label);
+    const tokens = meaningfulTokens(tokenize(src.content || src.label));
     const sourceSet = new Set(tokens);
     const overlap = scriptTokens.filter((token) => sourceSet.has(token));
     const coverageScore = scriptTokens.length
