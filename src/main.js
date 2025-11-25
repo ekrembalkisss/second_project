@@ -132,6 +132,13 @@ function extractSentences(text) {
     .filter(Boolean);
 }
 
+function extractLines(text) {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 function extractKeyPoints(text, maxItems = 3) {
   if (!text) return [];
   const sentences = extractSentences(text);
@@ -314,6 +321,7 @@ function tokenize(text) {
 function evaluateScript(script) {
   const scriptTokens = tokenize(script);
   const scriptSentences = extractSentences(script);
+  const scriptLines = extractLines(script);
   const aggregateText = sources.map((src) => src.content || src.label).join(' ');
   const sourceTokens = tokenize(aggregateText);
   const sourceTokenSet = new Set(sourceTokens);
@@ -333,8 +341,27 @@ function evaluateScript(script) {
     };
   });
 
+  const perLine = scriptLines.map((line, index) => {
+    const lineTokens = tokenize(line);
+    const matches = lineTokens.filter((token) => sourceTokenSet.has(token));
+    const ratio = lineTokens.length ? matches.length / lineTokens.length : 0;
+    const lineSentences = extractSentences(line);
+    const lineIsFactual =
+      lineSentences.some((sentence) => isFactualSentence(sentence)) || isFactualSentence(line);
+    return {
+      lineNumber: index + 1,
+      text: line,
+      isFactual: lineIsFactual,
+      supported: lineIsFactual ? ratio >= 0.35 && matches.length >= 2 : true,
+      matchRatio: Math.round(ratio * 100),
+      evidence: Array.from(new Set(matches)).slice(0, 12)
+    };
+  });
+
   const factualSentences = perSentence.filter((item) => item.isFactual);
+  const factualLines = perLine.filter((item) => item.isFactual);
   const unsupportedFactual = factualSentences.filter((item) => !item.supported).map((item) => item.sentence);
+  const unsupportedFactualLines = factualLines.filter((item) => !item.supported).map((item) => item.text);
 
   const overallCoverage = factualSentences.length
     ? Math.round(((factualSentences.length - unsupportedFactual.length) / factualSentences.length) * 100)
@@ -360,9 +387,12 @@ function evaluateScript(script) {
     matchedCount: matchedTokens.length,
     totalCount: scriptTokens.length,
     unsupportedSentences: unsupportedFactual,
+    unsupportedLines: unsupportedFactualLines,
     perSentence,
+    perLine,
     perSource,
-    factualSentenceCount: factualSentences.length
+    factualSentenceCount: factualSentences.length,
+    factualLineCount: factualLines.length
   };
 }
 
@@ -425,6 +455,29 @@ function renderReport(channel, title, script, evaluation, narrative) {
     : '<li>All detected factual sentences show evidence overlap.</li>';
   unsupported.appendChild(list);
 
+  const lineCheck = document.createElement('div');
+  lineCheck.className = 'line-review';
+  lineCheck.innerHTML = `
+    <div class="line-review__header">
+      <strong>Line-by-line scan</strong>
+      <span class="badge">${evaluation.factualLineCount || 0} factual lines</span>
+    </div>
+  `;
+  const lineList = document.createElement('ul');
+  lineList.className = 'line-review__list';
+  lineList.innerHTML = evaluation.perLine
+    .map((line) => {
+      const status = line.isFactual
+        ? line.supported
+          ? '<span class="pill pill--good">supported</span>'
+          : '<span class="pill pill--warn">needs evidence</span>'
+        : '<span class="pill">narrative</span>';
+      const evidenceText = line.evidence.length ? ` • evidence: ${line.evidence.join(', ')}` : '';
+      return `<li><span class="line-number">${line.lineNumber}</span> ${status}<span class="line-text">${line.text}</span><span class="line-evidence">${evidenceText}</span></li>`;
+    })
+    .join('');
+  lineCheck.appendChild(lineList);
+
   const sourceGrid = document.createElement('div');
   sourceGrid.className = 'source-coverage-grid';
   evaluation.perSource.forEach((item) => {
@@ -444,6 +497,7 @@ function renderReport(channel, title, script, evaluation, narrative) {
   accuracyCard.appendChild(header);
   accuracyCard.appendChild(coverageStats);
   accuracyCard.appendChild(unsupported);
+  accuracyCard.appendChild(lineCheck);
   accuracyCard.appendChild(sourceGrid);
   report.appendChild(accuracyCard);
 }
@@ -477,6 +531,12 @@ function buildTextReport(result) {
   } else {
     lines.push('  No factual sentences missing evidence.');
   }
+  lines.push('Line-by-line scan:');
+  result.evaluation.perLine.forEach((line) => {
+    const status = line.isFactual ? (line.supported ? 'supported' : 'needs evidence') : 'narrative';
+    const evidence = line.evidence.length ? ` | evidence: ${line.evidence.join(', ')}` : '';
+    lines.push(`  [${line.lineNumber}] (${status}) ${line.text}${evidence}`);
+  });
   lines.push('');
   lines.push('Per-source overlap:');
   result.evaluation.perSource.forEach((entry) => {
@@ -545,12 +605,12 @@ function runPipeline(channel, title, script) {
     () =>
       logEntry(
         'Script alignment',
-        `Checking factual sentences against captured sources. Coverage: ${evaluation.overallCoverage}%.`
+        `Scanning every script line for factual claims and evidence overlap. Coverage: ${evaluation.overallCoverage}%.`
       ),
     () =>
       logEntry(
         'Evidence flags',
-        `${evaluation.unsupportedSentences.length} factual sentences need stronger sourcing.`
+        `${evaluation.unsupportedSentences.length} factual sentences need stronger sourcing; ${evaluation.unsupportedLines.length} lines flagged overall.`
       ),
     () => logEntry('Report assembly', 'Merging channel inputs, accuracy checks, and narrative into a ready-to-share report.')
   ];

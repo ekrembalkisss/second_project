@@ -8,6 +8,7 @@ A lightweight, front-end only scaffold for collecting sources, extracting metada
 - **Validation:** Enforces minimum lengths for channel name, title, and script content.
 - **Pipeline visualization:** Motion-graphic inspired progress bar with animated orbital indicator and real-time log updates.
 - **Fact-aware accuracy check:** Detects factual sentences (ignoring humor, fiction, or expressive lines), measures coverage against captured sources, and flags only factual statements lacking evidence.
+- **Line-by-line scanning:** Every script line is checked for factual claims and evidence overlap so no context is skipped.
 - **Report output:** Combines user inputs, evidence coverage, and a human-like analysis narrative grounded in gathered sources.
 - **Exports:** Download the latest run as JSON or plain text to reuse results for training or offline review.
 

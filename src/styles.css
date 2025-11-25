@@ -486,6 +486,76 @@ main {
   font-size: 0.95rem;
 }
 
+.line-review {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(102, 224, 255, 0.12);
+  border-radius: 8px;
+  padding: 0.6rem;
+  margin: 0.5rem 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.line-review__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.line-review__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.line-review__list li {
+  display: grid;
+  gap: 0.15rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed rgba(102, 224, 255, 0.2);
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.line-number {
+  font-weight: 700;
+  color: var(--accent);
+  margin-right: 0.35rem;
+}
+
+.line-text {
+  color: rgba(255, 255, 255, 0.92);
+  display: block;
+}
+
+.line-evidence {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.pill {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  margin-left: 0.35rem;
+}
+
+.pill--good {
+  background: rgba(86, 232, 157, 0.12);
+  border-color: rgba(86, 232, 157, 0.6);
+}
+
+.pill--warn {
+  background: rgba(255, 193, 7, 0.12);
+  border-color: rgba(255, 193, 7, 0.6);
+}
+
 @media (max-width: 768px) {
   body {
     padding: 0 0.75rem 1.5rem;
