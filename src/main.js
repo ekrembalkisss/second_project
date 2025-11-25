@@ -66,6 +66,27 @@ function summarizeText(text, maxLength = 160) {
   return `${text.slice(0, maxLength)}...`;
 }
 
+function countWords(text) {
+  if (!text) return 0;
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function extractSentences(text) {
+  return text
+    .split(/[.!?]\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function extractKeyPoints(text, maxItems = 3) {
+  if (!text) return [];
+  const sentences = extractSentences(text);
+  return sentences
+    .sort((a, b) => b.length - a.length)
+    .slice(0, maxItems)
+    .map((sentence) => summarizeText(sentence, 240));
+}
+
 function simulateMetadataExtraction() {
   if (!sources.length) {
     metadataResults.innerHTML = '<span class="badge">Add at least one source first.</span>';
@@ -73,27 +94,77 @@ function simulateMetadataExtraction() {
     return;
   }
 
-  const typeCounts = sources.reduce((map, src) => {
-    map[src.type] = (map[src.type] || 0) + 1;
-    return map;
-  }, {});
+  const typeCounts = sources.reduce(
+    (map, src) => {
+      map[src.type] = (map[src.type] || 0) + 1;
+      map.totalWords += countWords(src.content || src.label);
+      return map;
+    },
+    { totalWords: 0 }
+  );
 
   metadataResults.innerHTML = '';
-  Object.entries(typeCounts).forEach(([type, count]) => {
-    const badge = document.createElement('span');
-    badge.className = 'badge';
-    badge.textContent = `${type} • ${count}`;
-    metadataResults.appendChild(badge);
+
+  const summary = document.createElement('div');
+  summary.className = 'metadata-summary';
+  summary.innerHTML = `
+    <div><strong>${sources.length}</strong> sources scanned</div>
+    <div><strong>${typeCounts.totalWords}</strong> words ingested</div>
+  `;
+  metadataResults.appendChild(summary);
+
+  const badges = document.createElement('div');
+  badges.className = 'metadata-badges';
+  Object.entries(typeCounts)
+    .filter(([key]) => key !== 'totalWords')
+    .forEach(([type, count]) => {
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = `${type} • ${count}`;
+      badges.appendChild(badge);
+    });
+  metadataResults.appendChild(badges);
+
+  const cards = document.createElement('div');
+  cards.className = 'metadata-cards';
+
+  sources.forEach((src) => {
+    const card = document.createElement('div');
+    card.className = 'metadata-card';
+
+    const heading = document.createElement('div');
+    heading.className = 'metadata-card__heading';
+    heading.innerHTML = `<strong>${src.label}</strong> <span>${src.type}</span>`;
+
+    const stats = document.createElement('div');
+    stats.className = 'metadata-card__stats';
+    const words = countWords(src.content || src.label);
+    stats.innerHTML = `Words: ${words} • Characters: ${(src.content || src.label).length}`;
+
+    const keyPoints = extractKeyPoints(src.content || src.label, 3);
+    const insights = document.createElement('ul');
+    insights.className = 'metadata-card__insights';
+    insights.innerHTML = keyPoints.length
+      ? keyPoints.map((point) => `<li>${point}</li>`).join('')
+      : '<li>No textual insights detected.</li>';
+
+    const fullText = document.createElement('details');
+    fullText.className = 'metadata-card__fulltext';
+    const summaryEl = document.createElement('summary');
+    summaryEl.textContent = 'View full extracted text';
+    const textBody = document.createElement('div');
+    textBody.textContent = src.content || 'No text extracted from this source.';
+    fullText.appendChild(summaryEl);
+    fullText.appendChild(textBody);
+
+    card.appendChild(heading);
+    card.appendChild(stats);
+    card.appendChild(insights);
+    card.appendChild(fullText);
+    cards.appendChild(card);
   });
 
-  const highlights = sources
-    .map((src) => `${src.label}${src.content ? ` — ${summarizeText(src.content)}` : ''}`)
-    .slice(0, 4);
-
-  const highlightBadge = document.createElement('span');
-  highlightBadge.className = 'badge';
-  highlightBadge.textContent = `Highlights: ${highlights.join(' | ')}`;
-  metadataResults.appendChild(highlightBadge);
+  metadataResults.appendChild(cards);
 
   metadataReady = true;
   validationMessage.textContent = '';

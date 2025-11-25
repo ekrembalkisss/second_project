@@ -4,7 +4,7 @@ A lightweight, front-end only scaffold for collecting sources, extracting metada
 
 ## Features
 - **Source capture:** Upload files (including DOCX text extraction), add web search and deep search queries, or paste raw text.
-- **Metadata gate:** Requires metadata extraction before channel name, title, and script inputs are accepted; adding new sources automatically re-locks the details form until metadata is refreshed.
+- **Metadata gate:** Requires metadata extraction before channel name, title, and script inputs are accepted; adding new sources automatically re-locks the details form until metadata is refreshed. Extraction now scans full source text, surfaces per-source word counts, key takeaways, and full-text previews.
 - **Validation:** Enforces minimum lengths for channel name, title, and script content.
 - **Pipeline visualization:** Motion-graphic inspired progress bar with animated orbital indicator and real-time log updates.
 - **Report output:** Combines user inputs and a human-like analysis narrative grounded in gathered sources.
